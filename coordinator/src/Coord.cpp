@@ -5,6 +5,20 @@ Coord::Coord(ros::NodeHandle n)
 {
     nh = n;
     tf_listener = new tf2_ros::TransformListener(tf_buffer);
+
+    std::string nss;
+    n.getParam("map_list", nss);
+
+    int i = 0;
+    int j = nss.find(' ');
+    while(j!=nss.npos)
+    {
+        std::string ns = nss.substr(i,j-1);
+        map_list.push_back(ns);
+        i = j;
+        j = nss.find(' ');
+    }
+
 }
 
 void Coord::add_maps(std::vector<std::string> name_spaces)
