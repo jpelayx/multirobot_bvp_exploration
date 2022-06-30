@@ -7,6 +7,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <ros/ros.h>
 #include <vector>
+#include <tuple>
 #include <mutex>
 
 class Coord 
@@ -36,7 +37,19 @@ class Coord
         std::mutex map_mtx;
         nav_msgs::OccupancyGrid map; 
 
+        // checks which maps are already merged
         void update_merged_maps();
+        bool map_updated;
+
+        // find all frontiers' centroids in last received map 
+        std::vector<geometry_msgs::Point> find_frontiers();
+
+        /* assigns objectives to maps
+         * output: vector of (robot_namespace, objective) tuples
+         */
+        std::vector<std::tuple<std::string, geometry_msgs::Point>> assign_frontiers();
+
+
 };
 
 #endif

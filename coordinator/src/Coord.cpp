@@ -5,6 +5,7 @@ Coord::Coord(ros::NodeHandle n)
 {
     nh = n;
     tf_listener = new tf2_ros::TransformListener(tf_buffer);
+    map_updated = false;
 
     std::string nss;
     n.getParam("map_list", nss);
@@ -34,6 +35,7 @@ void Coord::global_map_callback(const nav_msgs::OccupancyGrid& m)
     map = m;
     map_mtx.unlock();
     update_merged_maps();
+    map_updated = true;
 }
 
 void Coord::update_merged_maps()
@@ -59,5 +61,16 @@ void Coord::update_merged_maps()
 
 void Coord::run()
 {
-    ros::spin();
+    while(ros::ok())
+    {
+        ros::spinOnce();
+        if(map_updated)
+        {
+            map_updated = false;
+            find_frontiers();
+            assign_frontiers();
+            publish_objectives();
+        }
+
+    }
 }
