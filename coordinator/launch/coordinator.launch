@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="coordinator" type="coordinator_node" name="coordinator_node"/>
+    <node pkg="coordinator" type="coordinator_node" name="coordinator_node" output="screen"/>
     <arg name="map_list" default="tb3_0 tb3_1"/>
     <param name="map_list" value="$(arg map_list)"/>
 </launch>
