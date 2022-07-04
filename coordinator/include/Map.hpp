@@ -31,6 +31,8 @@ class Map
         bool map_updated;
 
         std::vector<std::vector<geometry_msgs::Point>> find_frontiers();
+        bool is_frontier(int pos);
+        std::vector<geometry_msgs::Point> extract_frontier(int pos);
         geometry_msgs::Point find_centroid(std::vector<geometry_msgs::Point> frontier);
 };
 
