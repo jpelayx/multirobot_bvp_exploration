@@ -10,23 +10,33 @@ Coord::Coord(ros::NodeHandle n)
     std::string nss;
     n.getParam("map_list", nss);
 
+    std::vector<std::string> names;
     int i = 0;
     int j = nss.find(' ');
     while(j!=nss.npos)
     {
         std::string ns = nss.substr(i,j-1);
-        map_list.push_back(ns);
+        names.push_back(ns);
         i = j;
         j = nss.find(' ');
     }
+    add_maps(names);
 
 }
 
-void Coord::add_maps(std::vector<std::string> name_spaces)
+void Coord::add_maps(std::vector<std::string> nss)
 {
     // subscribe to global map 
     global_map_sub = nh.subscribe("/map", 1, &Coord::global_map_callback, this);
-    map_list = name_spaces;
+    for (auto it = nss.begin(); it != nss.end(); it++)
+    {
+        struct CoordTarget* tgt = new CoordTarget();
+        tgt->is_merged = false;
+        tgt->ns = *it;
+        tgt->pub = nh.advertise<geometry_msgs::Point>(*it + "/objective", 1);
+        map_list.push_back(tgt);
+    }
+    merged_maps_count = 0;
 }
 
 void Coord::global_map_callback(const nav_msgs::OccupancyGrid& m)
@@ -40,23 +50,48 @@ void Coord::global_map_callback(const nav_msgs::OccupancyGrid& m)
 
 void Coord::update_merged_maps()
 {
-    if (merged_maps.size() == map_list.size())
+    if (merged_maps_count == map_list.size())
         return; // all maps merged
-    for (auto ns = map_list.begin(); ns != map_list.end(); ns++)
+    for (auto it = map_list.begin(); it != map_list.end(); it++)
     {
         // if able to find transform from global map to local map 
         // local map has been merged
-        bool in_global_map = true;
-        try {
-            geometry_msgs::TransformStamped tf = tf_buffer.lookupTransform(*ns + "/map", "map", ros::Time(0));
+        CoordTarget* t = *it;
+        if(!t->is_merged)
+        {
+            try {
+                geometry_msgs::TransformStamped tf = tf_buffer.lookupTransform(t->ns + "/map", "map", ros::Time(0));
+                t->is_merged = true;
+                merged_maps_count++;
+            }
+            catch (tf2::TransformException &ex) {
+                ROS_INFO("no tf to %s", (t->ns + "/map").c_str());
+            }
         }
-        catch (tf2::TransformException &ex) {
-            in_global_map = false;
-            ROS_INFO("no tf to %s", (*ns + "/map").c_str());
-        }
-        if (in_global_map)
-            merged_maps.push_back(*ns);
     }
+}
+
+void Coord::publish_objectives()
+{
+    for (auto it = map_list.begin(); it != map_list.end(); it++)
+    {
+        CoordTarget *t = *it;
+        if(t->is_merged){
+            // t->pub.publish(t->objective);
+            ROS_INFO("got %s", (t->ns).c_str());
+        }
+    }
+}
+
+std::vector<geometry_msgs::Point> Coord::find_frontiers()
+{
+    std::vector<geometry_msgs::Point> v;
+    return v;
+}
+
+void Coord::assign_frontiers(std::vector<geometry_msgs::Point> frontiers)
+{
+    return;
 }
 
 void Coord::run()
@@ -67,8 +102,8 @@ void Coord::run()
         if(map_updated)
         {
             map_updated = false;
-            find_frontiers();
-            assign_frontiers();
+            // std::vector<geometry_msgs::Point> frontiers = find_frontiers();
+            // assign_frontiers(frontiers);
             publish_objectives();
         }
 
