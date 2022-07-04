@@ -31,8 +31,6 @@ class Coord
 
         void run();
         
-        void global_map_callback(const nav_msgs::OccupancyGrid& map);
-
     private:
         ros::NodeHandle nh;
 

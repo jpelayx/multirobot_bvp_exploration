@@ -1,5 +1,5 @@
-#ifndef #COORD_MAP_H
-#define #COORD_MAP_H
+#ifndef COORD_MAP_H
+#define COORD_MAP_H
 
 #include <ros/ros.h>
 #include <nav_msgs/OccupancyGrid.h>
@@ -17,18 +17,21 @@ class Map
     public:
         Map(ros::NodeHandle, std::string topic);
 
-        void map_callback(const nav_msgs::OccupancyGrid& m)
+        void map_callback(const nav_msgs::OccupancyGrid& m);
         bool updated();
+        void reset_updated();
         
         std::vector<geometry_msgs::Point> get_frontiers_centroids();
 
     private:
+        ros::Subscriber map_sub;
         nav_msgs::OccupancyGrid map;
         std::mutex map_mtx;
-        char map_labels[];
+        std::vector<int8_t> map_labels;
+        bool map_updated;
 
         std::vector<std::vector<geometry_msgs::Point>> find_frontiers();
         geometry_msgs::Point find_centroid(std::vector<geometry_msgs::Point> frontier);
-}
+};
 
 #endif
