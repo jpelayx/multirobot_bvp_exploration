@@ -97,8 +97,20 @@ void Coord::publish_objectives()
 
 std::vector<geometry_msgs::Point> Coord::find_frontiers()
 {
-    std::vector<geometry_msgs::Point> v;
-    return v;
+    map_mtx.lock();
+    for (int y=0; y<map.info.height; y++) 
+        for (int x=0; x<map.info.width; x++)
+        {
+
+        }
+
+    map_mtx.unlock();
+    return;
+}
+
+geometry_msgs::Point Coord::find_centroid(std::vector<geometry_msgs::Point> frontier)
+{
+    return;
 }
 
 void Coord::assign_frontiers(std::vector<geometry_msgs::Point> frontiers)

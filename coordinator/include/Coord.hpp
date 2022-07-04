@@ -52,6 +52,7 @@ class Coord
 
         // find all frontiers' centroids in last received map 
         std::vector<geometry_msgs::Point> find_frontiers();
+        geometry_msgs::Point find_centroid(std::vector<geometry_msgs::Point> frontier);
 
         // assigns objectives to maps
         void assign_frontiers(std::vector<geometry_msgs::Point> frontiers);
