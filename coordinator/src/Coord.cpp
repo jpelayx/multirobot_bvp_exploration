@@ -1,5 +1,20 @@
 #include "Coord.hpp"
 
+std::vector<std::string> parse_names(std::string n)
+{
+    std::vector<std::string> ns;
+    int p0 = 0;
+    int pf = n.find(' ', p0);
+    while (pf != n.npos)
+    {
+        std::string name = n.substr(p0, pf-p0);
+        ns.push_back(name);
+        p0 = pf + 1;
+        pf = n.find(' ', p0);
+    }
+    ns.push_back(n.substr(p0));
+    return ns;
+} 
 
 Coord::Coord(ros::NodeHandle n)
 {
@@ -9,17 +24,7 @@ Coord::Coord(ros::NodeHandle n)
 
     std::string nss;
     n.getParam("map_list", nss);
-
-    std::vector<std::string> names;
-    int i = 0;
-    int j = nss.find(' ');
-    while(j!=nss.npos)
-    {
-        std::string ns = nss.substr(i,j-1);
-        names.push_back(ns);
-        i = j;
-        j = nss.find(' ');
-    }
+    std::vector<std::string> names = parse_names(nss);
     add_maps(names);
 
 }
@@ -28,6 +33,7 @@ void Coord::add_maps(std::vector<std::string> nss)
 {
     // subscribe to global map 
     global_map_sub = nh.subscribe("/map", 1, &Coord::global_map_callback, this);
+    ROS_INFO("coordinating :");
     for (auto it = nss.begin(); it != nss.end(); it++)
     {
         struct CoordTarget* tgt = new CoordTarget();
@@ -35,6 +41,7 @@ void Coord::add_maps(std::vector<std::string> nss)
         tgt->ns = *it;
         tgt->pub = nh.advertise<geometry_msgs::Point>(*it + "/objective", 1);
         map_list.push_back(tgt);
+        ROS_INFO("               %s", tgt->ns.c_str());
     }
     merged_maps_count = 0;
 }
@@ -59,13 +66,18 @@ void Coord::update_merged_maps()
         CoordTarget* t = *it;
         if(!t->is_merged)
         {
+            bool merged = true;
             try {
                 geometry_msgs::TransformStamped tf = tf_buffer.lookupTransform(t->ns + "/map", "map", ros::Time(0));
-                t->is_merged = true;
-                merged_maps_count++;
             }
             catch (tf2::TransformException &ex) {
                 ROS_INFO("no tf to %s", (t->ns + "/map").c_str());
+                merged = false;
+            }
+            if (merged)
+            {
+                t->is_merged = true;
+                merged_maps_count++;
             }
         }
     }
@@ -78,7 +90,7 @@ void Coord::publish_objectives()
         CoordTarget *t = *it;
         if(t->is_merged){
             // t->pub.publish(t->objective);
-            ROS_INFO("got %s", (t->ns).c_str());
+            ROS_INFO("got %s", (t->ns).c_str());        
         }
     }
 }
@@ -96,16 +108,20 @@ void Coord::assign_frontiers(std::vector<geometry_msgs::Point> frontiers)
 
 void Coord::run()
 {
+    ros::Rate rate(10);
+    std::cout << "aaaaaaaaaaa CU" << std::endl;
     while(ros::ok())
     {
         ros::spinOnce();
         if(map_updated)
         {
             map_updated = false;
+            ROS_INFO("map updated");
             // std::vector<geometry_msgs::Point> frontiers = find_frontiers();
             // assign_frontiers(frontiers);
             publish_objectives();
         }
+        rate.sleep();
 
     }
 }

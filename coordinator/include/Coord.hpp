@@ -61,4 +61,6 @@ class Coord
 
 };
 
+std::vector<std::string> parse_names(std::string);
+
 #endif
