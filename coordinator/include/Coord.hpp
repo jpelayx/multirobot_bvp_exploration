@@ -11,6 +11,8 @@
 #include <tuple>
 #include <mutex>
 
+#include "Map.hpp"
+
 struct CoordTarget
 {
     std::string ns; // namespace
@@ -30,34 +32,25 @@ class Coord
         void add_maps(std::vector<std::string> name_spaces);
 
         void run();
-        
+
     private:
         ros::NodeHandle nh;
 
         tf2_ros::Buffer tf_buffer;
         tf2_ros::TransformListener* tf_listener;
 
-        ros::Subscriber global_map_sub;
         std::vector<CoordTarget*> map_list;
-
-        std::mutex map_mtx;
-        nav_msgs::OccupancyGrid map; 
+        Map* global_map;
 
         // checks which maps are already merged
         void update_merged_maps();
         int merged_maps_count;
-        bool map_updated;
-
-        // find all frontiers' centroids in last received map 
-        std::vector<geometry_msgs::Point> find_frontiers();
-        geometry_msgs::Point find_centroid(std::vector<geometry_msgs::Point> frontier);
 
         // assigns objectives to maps
-        void assign_frontiers(std::vector<geometry_msgs::Point> frontiers);
+        void assign_frontiers(std::vector<int> frontiers);
 
+        // publishes each map's /objective
         void publish_objectives();
-
-
 };
 
 std::vector<std::string> parse_names(std::string);

@@ -20,7 +20,7 @@ Coord::Coord(ros::NodeHandle n)
 {
     nh = n;
     tf_listener = new tf2_ros::TransformListener(tf_buffer);
-    map_updated = false;
+    global_map = new Map(nh, "/map");
 
     std::string nss;
     n.getParam("map_list", nss);
@@ -31,8 +31,6 @@ Coord::Coord(ros::NodeHandle n)
 
 void Coord::add_maps(std::vector<std::string> nss)
 {
-    // subscribe to global map 
-    global_map_sub = nh.subscribe("/map", 1, &Coord::global_map_callback, this);
     ROS_INFO("coordinating :");
     for (auto it = nss.begin(); it != nss.end(); it++)
     {
@@ -44,15 +42,6 @@ void Coord::add_maps(std::vector<std::string> nss)
         ROS_INFO("               %s", tgt->ns.c_str());
     }
     merged_maps_count = 0;
-}
-
-void Coord::global_map_callback(const nav_msgs::OccupancyGrid& m)
-{
-    map_mtx.lock();
-    map = m;
-    map_mtx.unlock();
-    update_merged_maps();
-    map_updated = true;
 }
 
 void Coord::update_merged_maps()
@@ -95,42 +84,26 @@ void Coord::publish_objectives()
     }
 }
 
-std::vector<geometry_msgs::Point> Coord::find_frontiers()
+void Coord::assign_frontiers(std::vector<int> frontiers)
 {
-    map_mtx.lock();
-    for (int y=0; y<map.info.height; y++) 
-        for (int x=0; x<map.info.width; x++)
-        {
-
-        }
-
-    map_mtx.unlock();
-    return;
-}
-
-geometry_msgs::Point Coord::find_centroid(std::vector<geometry_msgs::Point> frontier)
-{
-    return;
-}
-
-void Coord::assign_frontiers(std::vector<geometry_msgs::Point> frontiers)
-{
+    // for every map's position
+    // get shortest euclidian distance to a frontier
+    // deal with conflicts
     return;
 }
 
 void Coord::run()
 {
     ros::Rate rate(10);
-    std::cout << "aaaaaaaaaaa CU" << std::endl;
     while(ros::ok())
     {
         ros::spinOnce();
-        if(map_updated)
+        if(global_map->updated())
         {
-            map_updated = false;
+            global_map->reset_updated();
             ROS_INFO("map updated");
-            // std::vector<geometry_msgs::Point> frontiers = find_frontiers();
-            // assign_frontiers(frontiers);
+            std::vector<int> frontiers = global_map->get_frontiers_centroids();
+            assign_frontiers(frontiers);
             publish_objectives();
         }
         rate.sleep();
