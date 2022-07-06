@@ -29,6 +29,11 @@ void Map::reset_updated()
     map_updated = false;
 }
 
+float Map::get_euclidian_distance(geometry_msgs::Point p, int j)
+{
+    return get_euclidian_distance(get_pos(p), j);
+}
+
 float Map::get_euclidian_distance(int i, int j)
 {
     return sqrt(pow(get_x(i)-get_x(j),2) + pow(get_y(i)-get_y(j),2));
@@ -47,6 +52,14 @@ std::vector<int> Map::get_frontiers_centroids()
     }
     ROS_INFO("found centroids");
     return centroids;
+}
+
+
+std::vector<int> Map::split_frontier(int f)
+{
+    std::vector<int> whole_frontier = extract_frontier(f);
+    std::vector<int> a, b;
+
 }
 
 int Map::find_centroid(std::vector<int> f)

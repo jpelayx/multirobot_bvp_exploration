@@ -86,22 +86,90 @@ void Coord::publish_objectives()
 
 void Coord::assign_frontiers(std::vector<int> frontiers)
 {
-    // for every map's position
-    // get shortest euclidian distance to a frontier
-    // [TODO] deal with conflicts
-
-    for (auto tgt = map_list.begin(); tgt != map_list.end(); tgt++)
+    // 1. computes frontier vector for each robot, ordered by distance
+    std::vector<std::vector<int>> close_frontiers;
+    std::vector<int> assigned_frontiers;
+    for (auto m = map_list.begin(); m != map_list.end(); m++)
     {
-        if ((*tgt)->is_merged)
+        if((*m)->is_merged)
         {
-            geometry_msgs::Point tgt_p = get_position(*tgt);
-            ROS_INFO("%s position: %f, %f", (*tgt)->ns.c_str(), tgt_p.x, tgt_p.y);
-            std::vector<int> closest_frontiers = find_closest_frontiers(tgt_p, frontiers, merged_maps_count);
-            (*tgt)->objective = global_map->get_point(closest_frontiers[0]);
-            ROS_INFO("assigned position (%f, %f) to robot %s.", (*tgt)->objective.x, (*tgt)->objective.y, (*tgt)->ns.c_str());
+            geometry_msgs::Point m_p = get_position(*m);
+            close_frontiers.push_back(find_closest_frontiers(m_p, frontiers, merged_maps_count));
         }
+        else 
+        {
+            std::vector<int> empty_v;
+            close_frontiers.push_back(empty_v);
+        }
+        assigned_frontiers.push_back(-1);
     }
 
+    // 2. assigns frontiers, dealing w/ conflicts
+    int assigned_maps = 0;
+    int has_conflicts = 0;
+    while (assigned_maps != merged_maps_count || has_conflicts > 0)
+    {
+        for (int i=0; i<map_list.size(); i++)
+        {
+            if(!map_list[i]->is_merged)
+                break;
+            if(assigned_frontiers[i] == -1)
+            {
+                assigned_frontiers[i] = 0;
+                if (find_conflict(i, close_frontiers, assigned_frontiers) != -1)
+                    has_conflicts++;
+            }
+            int conflict = find_conflict(i, close_frontiers, assigned_frontiers);
+            if(conflict != -1)
+            {
+                // in this case, more agents than frontiers, so we split the frontier where the 
+                // inevitable conflict occurs and send each agent to the closest half.
+                if( assigned_maps == frontiers.size())
+                {
+                    int conflict_frontier = close_frontiers[i][assigned_frontiers[i]];
+                    std::vector<int> split_f = global_map->split_frontier(conflict_frontier);
+                    // TODO: overload get_euclidian_distance w/ Point, int
+                    if (global_map->get_euclidian_distance(get_position(map_list[i]), split_f[0]) <
+                        global_map->get_euclidian_distance(get_position(map_list[conflict]), split_f[0]))
+                    {
+                        close_frontiers[i].push_back(split_f[0]);
+                        assigned_frontiers[i] = close_frontiers[i].size() - 1;
+                        close_frontiers[conflict].push_back(split_f[1]);
+                        assigned_frontiers[conflict] = close_frontiers[conflict].size() - 1;
+                    }
+                    else
+                    {
+                        close_frontiers[i].push_back(split_f[1]);
+                        assigned_frontiers[i] = close_frontiers[i].size() - 1;
+                        close_frontiers[conflict].push_back(split_f[0]);
+                        assigned_frontiers[conflict] = close_frontiers[conflict].size() - 1;
+                    }
+                    has_conflicts--;
+                }
+                // reassigns agent most distant to frontier
+                else 
+                {
+                    int conflict_frontier = close_frontiers[i][assigned_frontiers[i]];
+                    int worse_m;
+                    if (global_map->get_euclidian_distance(get_position(map_list[i]), conflict_frontier) <
+                        global_map->get_euclidian_distance(get_position(map_list[conflict]), conflict_frontier))
+                        worse_m = conflict;   
+                    else
+                        worse_m = i;
+                    assigned_frontiers[worse_m]++;
+
+                    // if no new conflict is found, resolved
+                    if(find_conflict(worse_m, close_frontiers, assigned_frontiers) == -1)
+                        has_conflicts--;
+                    // else, conflict move to other cells, to be resolved in the next iteration or
+                    // further down the loop.
+                }
+            }
+        }
+    } 
+
+    for (int i=0; i<map_list.size(); i++)
+        map_list[i]->objective = global_map->get_point(close_frontiers[i][assigned_frontiers[i]]);
 }
 
 geometry_msgs::Point Coord::get_position(CoordTarget* t)
@@ -130,7 +198,9 @@ std::vector<int> Coord::find_closest_frontiers(geometry_msgs::Point p, std::vect
     std::sort(fs.begin(), fs.end(), 
               [p_pos, this](int i, int j)
               {return this->global_map->get_euclidian_distance(p_pos, i) < this->global_map->get_euclidian_distance(p_pos, j);});
-    return std::vector<int>(fs.begin(), fs.begin() + n);
+    if (n > fs.size())
+        return std::vector<int>(fs.begin(), fs.begin() + n);
+    return fs;
 }
 
 

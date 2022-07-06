@@ -31,8 +31,13 @@ class Map
         // returns a list with the closest frontier cell to each frontier's centroid
         std::vector<int> get_frontiers_centroids();
 
+        /* splits frontier w/ centroid f in two halfs 
+         * returns vector w/ both sides' centroids */
+        std::vector<int> split_frontier(int f);
+
         // euclidian distance between two positions in OccupancyGrid
         float get_euclidian_distance(int i, int j);
+        float get_euclidian_distance(geometry_msgs::Point p, int j);
         /* given a OccupancyGrid position,
          * get word position */
         geometry_msgs::Point get_point(int pos);
