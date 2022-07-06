@@ -10,6 +10,7 @@
 #include <vector>
 #include <tuple>
 #include <mutex>
+#include <algorithm>
 
 #include "Map.hpp"
 
@@ -51,6 +52,13 @@ class Coord
 
         // publishes each map's /objective
         void publish_objectives();
+
+        // find robot's position 
+        geometry_msgs::Point get_position(CoordTarget* t);
+
+        // get the n closest frontiers to point p in fs
+        std::vector<int> find_closest_frontiers(geometry_msgs::Point p, std::vector<int> fs, int n);
+        bool sort_euclidian(int i, int j);
 };
 
 std::vector<std::string> parse_names(std::string);

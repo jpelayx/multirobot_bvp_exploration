@@ -13,6 +13,8 @@
 #define VISITED 1
 #define NOT_VISITED 0
 
+#define MIN_FRONTIER_SIZE 2
+
 #define FREE 30
 #define OCCUPIED 70
 #define UNEXPLORED -1
@@ -31,6 +33,10 @@ class Map
 
         // euclidian distance between two positions in OccupancyGrid
         float get_euclidian_distance(int i, int j);
+        /* given a OccupancyGrid position,
+         * get word position */
+        geometry_msgs::Point get_point(int pos);
+        int get_pos(geometry_msgs::Point p);
 
     private:
         ros::Subscriber map_sub;
@@ -45,6 +51,8 @@ class Map
 
         int get_x(int pos);
         int get_y(int pos);
+        /* given a x,y 2D matrix position, 
+         * get 1D vector position */
         int get_pos(int x, int y);
 
         // get value of map in position x, y
@@ -52,16 +60,23 @@ class Map
         // get value of map in vector position pos
         int8_t get_cell_value(int pos);
 
+        // get map metadata
         nav_msgs::MapMetaData get_info();
 
         std::vector<std::vector<int>> find_frontiers();
+        /* - true case cell in given position is free and 
+         * at least one of it's adjacent cells are unexplored 
+         * - false otherwise.*/
         bool is_frontier(int pos);
+        /* - true if cell's value is -1 or 
+         * between free (FREE) and  occupied (OCCUPIED) thresholds. 
+         * - false otherwise */
         bool is_unexplored(int x, int y);
 
         /* get every frontier cell adjacent to cell at pos 
            considering pos is the upmost and leftmost cell in the frontier */
         std::vector<int> extract_frontier(int pos);
-        std::vector<int> Map::adjacent_pos(int pos);
+        std::vector<int> adjacent_pos(int pos);
         int find_centroid(std::vector<int> frontier);
 };
 

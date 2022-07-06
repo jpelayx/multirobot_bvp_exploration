@@ -88,9 +88,51 @@ void Coord::assign_frontiers(std::vector<int> frontiers)
 {
     // for every map's position
     // get shortest euclidian distance to a frontier
-    // deal with conflicts
-    return;
+    // [TODO] deal with conflicts
+
+    for (auto tgt = map_list.begin(); tgt != map_list.end(); tgt++)
+    {
+        if ((*tgt)->is_merged)
+        {
+            geometry_msgs::Point tgt_p = get_position(*tgt);
+            ROS_INFO("%s position: %f, %f", (*tgt)->ns.c_str(), tgt_p.x, tgt_p.y);
+            std::vector<int> closest_frontiers = find_closest_frontiers(tgt_p, frontiers, merged_maps_count);
+            (*tgt)->objective = global_map->get_point(closest_frontiers[0]);
+            ROS_INFO("assigned position (%f, %f) to robot %s.", (*tgt)->objective.x, (*tgt)->objective.y, (*tgt)->ns.c_str());
+        }
+    }
+
 }
+
+geometry_msgs::Point Coord::get_position(CoordTarget* t)
+{
+    geometry_msgs::Point p;
+    if(!t->is_merged)
+        return p;
+    geometry_msgs::TransformStamped tf;
+    try
+    {
+        tf = tf_buffer.lookupTransform(t->ns + "/map", "map", ros::Time(0));
+    }
+    catch(const tf2::TransformException& e)
+    {
+        return p;
+    }
+    p.x = tf.transform.translation.x;
+    p.y = tf.transform.translation.y;
+    p.z = tf.transform.translation.z;    
+    return p;
+}
+
+std::vector<int> Coord::find_closest_frontiers(geometry_msgs::Point p, std::vector<int> fs, int n)
+{
+    int p_pos = global_map->get_pos(p);
+    std::sort(fs.begin(), fs.end(), 
+              [p_pos, this](int i, int j)
+              {return this->global_map->get_euclidian_distance(p_pos, i) < this->global_map->get_euclidian_distance(p_pos, j);});
+    return std::vector<int>(fs.begin(), fs.begin() + n);
+}
+
 
 void Coord::run()
 {
@@ -102,9 +144,13 @@ void Coord::run()
         {
             global_map->reset_updated();
             ROS_INFO("map updated");
+            update_merged_maps();
             std::vector<int> frontiers = global_map->get_frontiers_centroids();
+            ROS_INFO("computed frontiers");
             assign_frontiers(frontiers);
+            ROS_INFO("frontiers assigned");
             publish_objectives();
+            ROS_INFO("objectives published");
         }
         rate.sleep();
 

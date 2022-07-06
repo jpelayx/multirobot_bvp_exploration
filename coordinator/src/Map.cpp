@@ -12,11 +12,9 @@ void Map::map_callback(const nav_msgs::OccupancyGrid& m)
     map_mtx.lock();
     map = m;
     if (map_labels.empty() || map_labels.size() != map.data.size())
-    {
         map_labels.resize(map.data.size());
-        for(int i=0; i<map_labels.size(); i++)
-            map_labels[i] = NOT_VISITED;
-    }
+    for(int i=0; i<map_labels.size(); i++)
+        map_labels[i] = NOT_VISITED;
     map_mtx.unlock();
     map_updated = true;
 }
@@ -39,12 +37,15 @@ float Map::get_euclidian_distance(int i, int j)
 
 std::vector<int> Map::get_frontiers_centroids()
 {
+    ROS_INFO("finding frontiers");
     std::vector<std::vector<int>> frontiers = find_frontiers();
+    ROS_INFO("found %d frontiers. computing centroids", (int)frontiers.size());
     std::vector<int> centroids;
     for (auto f = frontiers.begin(); f != frontiers.end(); f++)
     {
         centroids.push_back(find_centroid(*f));
     }
+    ROS_INFO("found centroids");
     return centroids;
 }
 
@@ -58,6 +59,7 @@ int Map::find_centroid(std::vector<int> f)
         y_sum += get_y(*it);
     }
     int cx = x_sum/f.size(), cy = y_sum/f.size();
+    ROS_INFO("centroid: %d, %d", cx, cy);
 
     // find closest (euclidian distance) point in frontier
     int closest = f[0];
@@ -71,6 +73,7 @@ int Map::find_centroid(std::vector<int> f)
             closest = *it;
         }
     }
+    ROS_INFO("closest = %d, %d", get_x(closest), get_y(closest));
     return closest;
 }
 
@@ -82,9 +85,11 @@ std::vector<std::vector<int>> Map::find_frontiers()
         if(is_frontier(i) && map_labels[i] == NOT_VISITED)
         {
             std::vector<int> f = extract_frontier(i);
-            frontiers.push_back(f);
+            if (f.size() >= MIN_FRONTIER_SIZE)
+                frontiers.push_back(f);
         }
     }
+    return frontiers;
 }
 
 std::vector<int> Map::extract_frontier(int pos)
@@ -93,7 +98,7 @@ std::vector<int> Map::extract_frontier(int pos)
     candidates.push_back(pos);
     while (!candidates.empty())
     {
-        int c = candidates[candidates.size()];
+        int c = candidates[candidates.size()-1];
         candidates.pop_back();
 
         if(is_frontier(c) && map_labels[c] == NOT_VISITED)
@@ -104,6 +109,7 @@ std::vector<int> Map::extract_frontier(int pos)
         }
         map_labels[c] = VISITED;
     }
+    ROS_INFO("got %d cells", (int)frontier.size());
     return frontier;   
 }
 
@@ -165,6 +171,24 @@ int Map::get_pos(int x, int y)
 {
     nav_msgs::MapMetaData info = get_info();
     return y*info.width + x;
+}
+
+int Map::get_pos(geometry_msgs::Point p)
+{
+    nav_msgs::MapMetaData info = get_info();
+    int x = (p.x - info.origin.position.x - info.resolution/2) / info.resolution;
+    int y = (p.y - info.origin.position.y - info.resolution/2) / info.resolution;
+    return get_pos(x, y);
+}
+
+geometry_msgs::Point Map::get_point(int pos)
+{
+    nav_msgs::MapMetaData info = get_info();
+    geometry_msgs::Point p;
+    p.x = get_x(pos) * info.resolution + info.origin.position.x + info.resolution/2;
+    p.y = get_y(pos) * info.resolution + info.origin.position.y + info.resolution/2;
+    p.z = info.origin.position.z + info.resolution/2;
+    return p;
 }
 
 nav_msgs::MapMetaData Map::get_info()
