@@ -128,7 +128,6 @@ void Coord::assign_frontiers(std::vector<int> frontiers)
                 {
                     int conflict_frontier = close_frontiers[i][assigned_frontiers[i]];
                     std::vector<int> split_f = global_map->split_frontier(conflict_frontier);
-                    // TODO: overload get_euclidian_distance w/ Point, int
                     if (global_map->get_euclidian_distance(get_position(map_list[i]), split_f[0]) <
                         global_map->get_euclidian_distance(get_position(map_list[conflict]), split_f[0]))
                     {
@@ -203,6 +202,14 @@ std::vector<int> Coord::find_closest_frontiers(geometry_msgs::Point p, std::vect
     return fs;
 }
 
+int find_conflict(int i, std::vector<std::vector<int>> frontiers, std::vector<int> assigned_frontiers)
+{
+    int f = assigned_frontiers[i];
+    for(int j=0; j<assigned_frontiers.size(); j++)
+        if(i != j && assigned_frontiers[i] == assigned_frontiers[j])
+            return j;
+    return -1;
+}
 
 void Coord::run()
 {

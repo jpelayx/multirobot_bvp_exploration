@@ -59,6 +59,9 @@ class Coord
         // get the n closest frontiers to point p in fs
         std::vector<int> find_closest_frontiers(geometry_msgs::Point p, std::vector<int> fs, int n);
         bool sort_euclidian(int i, int j);
+        
+        
+        int find_conflict(int i, std::vector<std::vector<int>> frontiers, std::vector<int> assigned_frontiers);
 };
 
 std::vector<std::string> parse_names(std::string);
