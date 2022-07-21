@@ -55,11 +55,69 @@ std::vector<int> Map::get_frontiers_centroids()
 }
 
 
-std::vector<int> Map::split_frontier(int f)
+std::vector<int> Map::split_frontier(int f, int p1, int p2)
 {
-    std::vector<int> whole_frontier = extract_frontier(f);
-    std::vector<int> a, b;
+    // find frontier's bounding box (aliigned with x,y)
+    // chop that box along the longest direction (along x or along y)
+    // each resulting box a new frontier
+    // find each frontier's centroid.
 
+    std::vector<int> whole_frontier = extract_frontier(f);
+    int min = INT_MAX, max = 0;
+    for (auto cell = whole_frontier.begin(); cell != whole_frontier.end(); cell++)
+    {   
+        if(*cell < min)
+            min = *cell;
+        if(*cell > max)
+            max = *cell; 
+    }
+    int min_x = get_x(min), min_y = get_y(min),
+        max_x = get_x(max), max_y = get_y(max);
+
+    int max_x_f1, min_x_f1, max_y_f1, min_y_f1, 
+        max_x_f2, min_x_f2, max_y_f2, min_y_f2;
+    if(max_x - min_x >= max_y - min_y)
+    {
+        min_x_f1 = min_x;
+        min_y_f1 = min_y;
+        max_x_f1 = min_x + (int)((max_x - min_x)/2);
+        max_y_f1 = max_y;
+
+        min_x_f2 = min_x + (int)((max_x - min_x)/2) + 1;
+        min_y_f2 = min_y;
+        max_x_f2 = max_x;
+        max_y_f2 = max_y;
+    }
+    else 
+    {
+        min_x_f1 = min_x;
+        min_y_f1 = min_y;
+        max_x_f1 = max_x;
+        max_y_f1 = min_y + (int)((max_y - min_y)/2);
+
+        min_x_f2 = min_x;
+        min_y_f2 = min_y + (int)((max_y - min_y)/2) + 1;
+        max_x_f2 = max_x;
+        max_y_f2 = max_y;
+    }
+    std::vector<int> f1, f2;
+    for(int x =  min_x_f1; x <= max_x_f1; x++)
+        for(int y = min_y_f1; y <= max_y_f1; y++)
+        {
+            if(is_frontier(get_pos(x, y)))
+                f1.push_back(get_pos(x,y));    
+        }
+    for(int x =  min_x_f2; x <= max_x_f2; x++)
+        for(int y = min_y_f2; y <= max_y_f2; y++)
+        {
+            if(is_frontier(get_pos(x, y)))
+                f2.push_back(get_pos(x,y));    
+        }
+    std::vector<int> centroids;
+    centroids.push_back(find_centroid(f1));
+    centroids.push_back(find_centroid(f2));
+
+    return centroids;
 }
 
 int Map::find_centroid(std::vector<int> f)
@@ -198,9 +256,9 @@ geometry_msgs::Point Map::get_point(int pos)
 {
     nav_msgs::MapMetaData info = get_info();
     geometry_msgs::Point p;
-    p.x = get_x(pos) * info.resolution + info.origin.position.x + info.resolution/2;
-    p.y = get_y(pos) * info.resolution + info.origin.position.y + info.resolution/2;
-    p.z = info.origin.position.z + info.resolution/2;
+    p.x = (get_x(pos) * info.resolution) + info.origin.position.x + info.resolution/2;
+    p.y = (get_y(pos) * info.resolution) + info.origin.position.y + info.resolution/2;
+    p.z = 0.0;
     return p;
 }
 

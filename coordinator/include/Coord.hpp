@@ -2,7 +2,7 @@
 #define COORD_H
 
 #include <nav_msgs/OccupancyGrid.h>
-#include <geometry_msgs/Point.h>
+#include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2_ros/transform_listener.h>
 #include <ros/ros.h>
@@ -18,7 +18,7 @@ struct CoordTarget
 {
     std::string ns; // namespace
     ros::Publisher pub;
-    geometry_msgs::Point objective;
+    geometry_msgs::PointStamped objective;
     bool is_merged;
 };
 

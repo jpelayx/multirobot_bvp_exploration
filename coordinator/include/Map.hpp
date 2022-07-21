@@ -33,7 +33,7 @@ class Map
 
         /* splits frontier w/ centroid f in two halfs 
          * returns vector w/ both sides' centroids */
-        std::vector<int> split_frontier(int f);
+        std::vector<int> split_frontier(int f, int p1, int p2);
 
         // euclidian distance between two positions in OccupancyGrid
         float get_euclidian_distance(int i, int j);

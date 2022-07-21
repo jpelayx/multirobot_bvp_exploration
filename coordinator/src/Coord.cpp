@@ -78,7 +78,7 @@ void Coord::publish_objectives()
     {
         CoordTarget *t = *it;
         if(t->is_merged){
-            // t->pub.publish(t->objective);
+            t->pub.publish(t->objective);
             ROS_INFO("got %s", (t->ns).c_str());        
         }
     }
@@ -107,27 +107,29 @@ void Coord::assign_frontiers(std::vector<int> frontiers)
     // 2. assigns frontiers, dealing w/ conflicts
     int assigned_maps = 0;
     int has_conflicts = 0;
-    while (assigned_maps != merged_maps_count || has_conflicts > 0)
+    while (!(assigned_maps == merged_maps_count && has_conflicts == 0))
     {
         for (int i=0; i<map_list.size(); i++)
         {
+            std::cout << "mapa " << i << std::endl;
             if(!map_list[i]->is_merged)
                 break;
             if(assigned_frontiers[i] == -1)
             {
                 assigned_frontiers[i] = 0;
-                if (find_conflict(i, close_frontiers, assigned_frontiers) != -1)
-                    has_conflicts++;
             }
             int conflict = find_conflict(i, close_frontiers, assigned_frontiers);
             if(conflict != -1)
             {
+                has_conflicts++;
+                std::cout << "found conflict " << std::endl;
                 // in this case, more agents than frontiers, so we split the frontier where the 
                 // inevitable conflict occurs and send each agent to the closest half.
                 if( assigned_maps == frontiers.size())
                 {
+                    std::cout << "splitting frontier " << std::endl;
                     int conflict_frontier = close_frontiers[i][assigned_frontiers[i]];
-                    std::vector<int> split_f = global_map->split_frontier(conflict_frontier);
+                    std::vector<int> split_f = global_map->split_frontier(conflict_frontier, i, conflict);
                     if (global_map->get_euclidian_distance(get_position(map_list[i]), split_f[0]) <
                         global_map->get_euclidian_distance(get_position(map_list[conflict]), split_f[0]))
                     {
@@ -143,11 +145,12 @@ void Coord::assign_frontiers(std::vector<int> frontiers)
                         close_frontiers[conflict].push_back(split_f[0]);
                         assigned_frontiers[conflict] = close_frontiers[conflict].size() - 1;
                     }
-                    has_conflicts--;
+                    has_conflicts--; // conflict solved
                 }
                 // reassigns agent most distant to frontier
                 else 
                 {
+                    std::cout << "reassigning most distant" << std::endl;
                     int conflict_frontier = close_frontiers[i][assigned_frontiers[i]];
                     int worse_m;
                     if (global_map->get_euclidian_distance(get_position(map_list[i]), conflict_frontier) <
@@ -156,19 +159,30 @@ void Coord::assign_frontiers(std::vector<int> frontiers)
                     else
                         worse_m = i;
                     assigned_frontiers[worse_m]++;
+                    std::cout << "number " << worse_m << " reassigned" << std::endl;
 
                     // if no new conflict is found, resolved
                     if(find_conflict(worse_m, close_frontiers, assigned_frontiers) == -1)
                         has_conflicts--;
+                    else
+                     std::cout << "conflict not yet resolved " << std::endl; 
                     // else, conflict move to other cells, to be resolved in the next iteration or
                     // further down the loop.
                 }
             }
+            assigned_maps++;
         }
     } 
 
     for (int i=0; i<map_list.size(); i++)
-        map_list[i]->objective = global_map->get_point(close_frontiers[i][assigned_frontiers[i]]);
+    {
+        geometry_msgs::PointStamped p;
+        p.point = global_map->get_point(close_frontiers[i][assigned_frontiers[i]]);
+        p.header.frame_id = "/map";
+        p.header.stamp = ros::Time(0);
+        map_list[i]->objective =  p;
+        std::cout << "map " << i << "goes to (" << p.point.x << ", " << p.point.y << ")" << std::endl; 
+    }
 }
 
 geometry_msgs::Point Coord::get_position(CoordTarget* t)
@@ -202,7 +216,7 @@ std::vector<int> Coord::find_closest_frontiers(geometry_msgs::Point p, std::vect
     return fs;
 }
 
-int find_conflict(int i, std::vector<std::vector<int>> frontiers, std::vector<int> assigned_frontiers)
+int Coord::find_conflict(int i, std::vector<std::vector<int>> frontiers, std::vector<int> assigned_frontiers)
 {
     int f = assigned_frontiers[i];
     for(int j=0; j<assigned_frontiers.size(); j++)
