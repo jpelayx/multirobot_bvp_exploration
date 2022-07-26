@@ -57,10 +57,13 @@ std::vector<int> Map::get_frontiers_centroids()
 
 std::vector<int> Map::split_frontier(int f, int p1, int p2)
 {
-    // find frontier's bounding box (aliigned with x,y)
-    // chop that box along the longest direction (along x or along y)
-    // each resulting box a new frontier
-    // find each frontier's centroid.
+    /* - find frontier's bounding box (aliigned with x,y)
+     * - split that box along the shortest dimension
+     *   (e.g.: if box higher (y) than it is long (x), split it into two boxes 
+     *          with height y/2 and width x)
+     * - each resulting box a new frontier
+     * - find each frontier's centroid. 
+     */
 
     std::vector<int> whole_frontier = extract_frontier(f);
     int min = INT_MAX, max = 0;
