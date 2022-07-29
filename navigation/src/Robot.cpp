@@ -81,9 +81,7 @@ int Robot::get_transform(geometry_msgs::Transform &transform)
 {
     geometry_msgs::TransformStamped current_pos;
     try{
-            std::string n = name;
-            n.erase(0,1);
-            current_pos = tf_buffer.lookupTransform(n+"map", name+"base_link", ros::Time(0));
+            current_pos = tf_buffer.lookupTransform(name+"map", name+"base_link", ros::Time(0));
             transform = current_pos.transform;
             return 0;
     }

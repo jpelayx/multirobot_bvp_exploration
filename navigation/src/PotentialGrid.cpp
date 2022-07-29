@@ -7,39 +7,47 @@
 PotentialGrid::PotentialGrid(ros::NodeHandle *n, std::string name_space)
 {
     initialized = 0;
-    n->getParam("pub_potential", param_pub_pot);
-    n->getParam("pub_gradient", param_pub_gradient_vec);
-    n->getParam("pub_path", param_pub_path);
-    n->getParam("pub_vec_field", param_pub_vec_field);
-    n->getParam("window_radius", param_window_radius);
-    n->getParam("conv_tol", param_potential_convergence_tol);
+    // n->getParam("pub_potential", param_pub_pot);
+    // n->getParam("pub_gradient", param_pub_gradient_vec);
+    // n->getParam("pub_path", param_pub_path);
+    // n->getParam("pub_vec_field", param_pub_vec_field);
+    // n->getParam("window_radius", param_window_radius);
+    // n->getParam("conv_tol", param_potential_convergence_tol);
+	param_pub_pot = 1;
+	param_pub_gradient_vec = 1;
+	param_pub_path = 1;
+	param_pub_vec_field = 1;
+	param_window_radius = 3.5;
+	param_potential_convergence_tol = 1.0E-7;
+
+    std::cout << "WINDOW RADIUS: " << param_window_radius << std::endl;
+    std::cout << "CONV TOL: " << param_potential_convergence_tol << std::endl;
 
     std::cout << "namespace: " << name_space << std::endl;
     ns="";
      if(name_space != "/"){
         ns = name_space+"/";
-        // ns.erase(0,1);
+        ns.erase(ns.begin());
     }
     std::cout << "ns: " << ns << std::endl;
-    map_sub = n->subscribe(ns+"map", 1, &PotentialGrid::get_map, this);
-    objective_sub = n->subscribe(ns+"objective", 1, &PotentialGrid::get_objective, this);
+    map_sub = n->subscribe("map", 1, &PotentialGrid::get_map, this);
+    objective_sub = n->subscribe("objective", 1, &PotentialGrid::get_objective, this);
     objective_is_set = false;
 
     if(param_pub_pot){
         ROS_INFO("publishing to /potential_field");
-        potential_pub = n->advertise<nav_msgs::OccupancyGrid>(ns+"potential_field",1);
+        potential_pub = n->advertise<nav_msgs::OccupancyGrid>("potential_field",1);
     }
     if(param_pub_gradient_vec){
         ROS_INFO("publishing to /gradient");
-        vector_pub = n->advertise<visualization_msgs::Marker>(ns+"gradient",1);
+        vector_pub = n->advertise<visualization_msgs::Marker>("gradient",1);
     }
     if(param_pub_path){
-        path_pub = n->advertise<nav_msgs::Path>(ns+"path",1);
+        path_pub = n->advertise<nav_msgs::Path>("path",1);
         path.header.frame_id = "map";
         path.header.seq = 0;
     }
-    vector_field_pub = n->advertise<visualization_msgs::Marker>(ns+"vector_field", 1);
-    front_pub = n->advertise<nav_msgs::GridCells>(ns+"frontiers", 1);
+    vector_field_pub = n->advertise<visualization_msgs::Marker>("vector_field", 1);
 
     robot = new Robot(n, ns);
 }
@@ -58,7 +66,7 @@ void PotentialGrid::get_map(const nav_msgs::OccupancyGrid::ConstPtr& map){
 
     ROS_INFO("updating info");
 
-    geometry_msgs::TransformStamped current_pos;
+    geometry_msgs::Transform current_pos;
     if(robot->get_transform(current_pos) == -1){
         return;
     }    
@@ -82,16 +90,21 @@ void PotentialGrid::get_map(const nav_msgs::OccupancyGrid::ConstPtr& map){
     }
     else{
         //update activation window
-        x0 = grid_x(current_pos) - (int)(param_window_radius/map->info.resolution);
+        std::cout << "window radius: " << param_window_radius << " resolution: " << resolution << std::endl;
+        x0 = grid_x(current_pos) - (int)(param_window_radius/resolution);
+        std::cout << "x0 = " << x0;
         if(x0<0)
             x0=0;
-        xf = grid_x(current_pos) + (int)(param_window_radius/map->info.resolution);
+        xf = grid_x(current_pos) + (int)(param_window_radius/resolution);
+        std::cout << ", xf = " << xf;
         if(xf>width)
             xf=width;
-        y0 = grid_y(current_pos) - (int)(param_window_radius/map->info.resolution);
+        y0 = grid_y(current_pos) - (int)(param_window_radius/resolution);
+        std::cout << ", y0 = " << y0;
         if(y0<0)
             y0=0;
-        yf = grid_y(current_pos) + (int)(param_window_radius/map->info.resolution);
+        yf = grid_y(current_pos) + (int)(param_window_radius/resolution);
+        std::cout << ", yf = " << yf << std::endl;
         if(yf>height)
             yf=height;
 
@@ -119,12 +132,20 @@ void PotentialGrid::get_objective(const geometry_msgs::PointStamped::ConstPtr& p
     objective_is_set = true;
 }
 
-int PotentialGrid::grid_x(geometry_msgs::TransformStamped pos){
-    return (int) ((pos.transform.translation.x - map0.x)/resolution);
+int PotentialGrid::grid_x(geometry_msgs::Transform pos){
+    return (int) ((pos.translation.x - map0.x)/resolution);
 }
 
-int PotentialGrid::grid_y(geometry_msgs::TransformStamped pos){
-    return (int) ((pos.transform.translation.y - map0.y)/resolution);
+int PotentialGrid::grid_y(geometry_msgs::Transform pos){
+    return (int) ((pos.translation.y - map0.y)/resolution);
+}
+
+int PotentialGrid::grid_x(geometry_msgs::Point pos){
+    return (int) ((pos.x - map0.x)/resolution);
+}
+
+int PotentialGrid::grid_y(geometry_msgs::Point pos){
+    return (int) ((pos.y - map0.y)/resolution);
 }
 
 double PotentialGrid::world_x(int x){
@@ -176,7 +197,7 @@ void PotentialGrid::set_goal(geometry_msgs::Point p)
     int y0 = y - radius >= 0? y - radius  : 0;
     int yf = y + radius < height? y + radius  : height - 1;
 
-    grid_mtx.lock()
+    grid_mtx.lock();
     for(int i = x0; i <= xf; i++)
         for(int j = y0; j <= yf; j++)
             if(grid[i][j]->occupation == FREE)
@@ -197,7 +218,7 @@ void PotentialGrid::set_goal(int x, int x_max, int y, int y_max){
         }
     }
     if(!frontier_found)
-        return false;
+        return;
     ROS_INFO("frontiers found");
     
     std::vector<int> frontier_centers;
@@ -259,7 +280,7 @@ void PotentialGrid::set_goal(int x, int x_max, int y, int y_max){
         ROS_INFO("center: %d, %d == %f, %f", frontier_centers[n], frontier_centers[n+1], world_x(frontier_centers[n]), world_y(frontier_centers[n+1]));
         grid[frontier_centers[n]][frontier_centers[n+1]]->potential = 0.0;
     }
-    return true;     
+    return;     
 }
         
 void PotentialGrid::expand_obstacles(int x, int x_max, int y, int y_max){
@@ -325,8 +346,8 @@ std::vector<double> PotentialGrid::normalized_gradient(int x, int y){
 }
 
 void PotentialGrid::followPotential(){
-    geometry_msgs::TransformStamped pos;
-    if(current_position(&pos)==-1)
+    geometry_msgs::Transform pos;
+    if(robot->get_transform(pos)==-1)
         return;
    
     grid_mtx.lock();
@@ -339,63 +360,9 @@ void PotentialGrid::followPotential(){
         publish_vector(gradient, pos);
     if(param_pub_path)
         publish_path(pos);
-
-    geometry_msgs::Twist vel;
     
-    vel.linear.y = 0.00;
-    vel.linear.z = 0.00;
-    vel.linear.x = 0.03;
+    robot->follow(gradient);
 
-    vel.angular.x = 0.0;
-    vel.angular.y = 0.0;
-   
-    if (gradient[0] == 0 && gradient[1] == 0){
-        vel.angular.z = vel.linear.x = 0.0;   
-        vel.linear.x = -0.01;
-    }
-    else{
-        float MAX_VEL = 0.7;
-
-        tf2::Quaternion rotation;
-        tf2::fromMsg(pos.transform.rotation, rotation);
-        double robot_angle = tf2::getYaw(rotation); // [0, 2PI]
-        // ROS_INFO("robot angle: %f", robot_angle);
-
-        double gradient_angle = atan2(gradient[1], gradient[0]);
-        if(isnan(gradient_angle)){
-            // ROS_INFO("nan! gradient (%f, %f)", gradient[0], gradient[1]);
-            if(gradient[1] > 0)
-                gradient_angle = M_PI_2;
-            else
-                gradient_angle = M_PI_2;
-        }        
-        // ROS_INFO("gradient angle: %f", gradient_angle); 
-        
-        double phi = gradient_angle - robot_angle; 
-        // ROS_INFO("phi: %f == %.2f", phi, normalize_angle(phi));
-        phi = normalize_angle(phi); 
-
-        if(phi > M_PI_2){
-            vel.angular.z = 0.5;
-            vel.linear.x  = 0.0;
-        }
-        else if(phi < -M_PI_2){
-            vel.angular.z = -0.5;
-            vel.linear.x  = 0.0;
-        }
-        else{
-            vel.angular.z = (phi/M_PI_2)*0.5;
-        }
-    }
-    vel_pub.publish(vel);
-}
-
-double PotentialGrid::normalize_angle(double a){
-    while(a > M_PI)
-        a -= M_PI*2;
-    while(a < -M_PI)
-        a += M_PI*2;  
-    return a;
 }
 
 void PotentialGrid::publish_potential_field(nav_msgs::MapMetaData info){
@@ -410,7 +377,7 @@ void PotentialGrid::publish_potential_field(nav_msgs::MapMetaData info){
     potential_pub.publish(pf);
 }
 
-void PotentialGrid::publish_vector(std::vector<double> v, geometry_msgs::TransformStamped rob){
+void PotentialGrid::publish_vector(std::vector<double> v, geometry_msgs::Transform rob){
     uint32_t arrow = visualization_msgs::Marker::ARROW;
     visualization_msgs::Marker mk;
     mk.header.frame_id = "map";
@@ -429,9 +396,9 @@ void PotentialGrid::publish_vector(std::vector<double> v, geometry_msgs::Transfo
     mk.pose.position.z =   0.0; 
    
     mk.points.resize(2);
-    mk.points[0].x = rob.transform.translation.x;
-    mk.points[0].y = rob.transform.translation.y;
-    mk.points[0].z = rob.transform.translation.z;
+    mk.points[0].x = rob.translation.x;
+    mk.points[0].y = rob.translation.y;
+    mk.points[0].z = rob.translation.z;
     mk.points[1].x = mk.points[0].x + v[0]*0.25;
     mk.points[1].y = mk.points[0].y + v[1]*0.25;
     mk.points[1].z = mk.points[0].z; 
@@ -515,35 +482,19 @@ void PotentialGrid::publish_vector_field(){
     vector_field_pub.publish(m);
 }
 
-void PotentialGrid::publish_path(geometry_msgs::TransformStamped current_pos){
+void PotentialGrid::publish_path(geometry_msgs::Transform current_pos){
     geometry_msgs::PoseStamped * p = new geometry_msgs::PoseStamped;
-    p->header.frame_id = path.header.frame_id;
-    p->header.stamp = current_pos.header.stamp;
-    p->pose.orientation = current_pos.transform.rotation;
-    p->pose.position.x = current_pos.transform.translation.x;
-    p->pose.position.y = current_pos.transform.translation.y;
-    p->pose.position.z = current_pos.transform.translation.z;
+    p->header.frame_id = "map";
+    p->header.stamp = ros::Time(0);
+    p->pose.orientation = current_pos.rotation;
+    p->pose.position.x = current_pos.translation.x;
+    p->pose.position.y = current_pos.translation.y;
+    p->pose.position.z = current_pos.translation.z;
 
     path.poses.push_back(*p);
     path_pub.publish(path);
 }
 
-void PotentialGrid::publish_frontiers(std::vector<int> centers){
-    nav_msgs::GridCells f;
-    f.cell_height = resolution;
-    f.cell_width  = resolution;
-    f.header.frame_id = "map";
-    f.header.stamp    = ros::Time();
-    ROS_INFO("n frontiers = %d", (int)(centers.size()/2));
-    for(int n=0; n<centers.size(); n+=2){
-        geometry_msgs::Point p;
-        p.x = centers[n];
-        p.y = centers[n+1];
-        p.z = 0.0;
-        f.cells.push_back(p);
-    }
-    front_pub.publish(f);
-}
 
 Cell::Cell(int v){
     if(v >= OCC_TRESH){

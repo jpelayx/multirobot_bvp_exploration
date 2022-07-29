@@ -41,10 +41,14 @@ class PotentialGrid
         void get_map(const nav_msgs::OccupancyGrid::ConstPtr&);
         void get_objective(const geometry_msgs::PointStamped::ConstPtr&);
 
-        void update_potential(int,int,int,int);
+        void update_potential(int x_min,int x_max,int y_min,int y_max);
+
+        // set goals to frontiers inside window
         void set_goal(int x_min,int x_max,int y_min,int y_max);
+        
+        // set goal to point p
         void set_goal(geometry_msgs::Point p);
-        void expand_obstacles(int,int,int,int);
+        void expand_obstacles(int x_min,int x_max,int y_min,int y_max);
         bool is_frontier(int,int);
         bool near_occupied(int,int);
 
@@ -52,16 +56,16 @@ class PotentialGrid
         int grid_y(geometry_msgs::Transform);
         int grid_x(geometry_msgs::Point);
         int grid_y(geometry_msgs::Point);
-        double world_x(int); 
-        double world_y(int); 
+        double world_x(int x); 
+        double world_y(int y); 
 
-        std::vector<double> normalized_gradient(int,int);
+        std::vector<double> normalized_gradient(int x,int y);
         
         void followPotential();
 
         void publish_potential_field(nav_msgs::MapMetaData);
-        void publish_vector(std::vector<double>, geometry_msgs::TransformStamped);
-        void publish_path(geometry_msgs::TransformStamped); 
+        void publish_vector(std::vector<double>, geometry_msgs::Transform);
+        void publish_path(geometry_msgs::Transform); 
         void publish_vector_field();
 
         int width, height;
@@ -91,7 +95,7 @@ class PotentialGrid
             param_pub_gradient_vec,
             param_pub_vec_field,
             param_pub_path;
-        double param_window_radius,
+        float param_window_radius,
                param_potential_convergence_tol;
 
         std::mutex grid_mtx;

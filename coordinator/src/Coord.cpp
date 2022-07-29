@@ -37,7 +37,7 @@ void Coord::add_maps(std::vector<std::string> nss)
         struct CoordTarget* tgt = new CoordTarget();
         tgt->is_merged = false;
         tgt->ns = *it;
-        tgt->pub = nh.advertise<geometry_msgs::Point>(*it + "/objective", 1);
+        tgt->pub = nh.advertise<geometry_msgs::PointStamped>(*it + "/objective", 1);
         map_list.push_back(tgt);
         ROS_INFO("               %s", tgt->ns.c_str());
     }

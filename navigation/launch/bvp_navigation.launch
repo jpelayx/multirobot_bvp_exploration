@@ -1,0 +1,18 @@
+<launch>
+  <arg name="ns" default=""/>
+  <arg name="window_radius" default="3.5"/>
+  <arg name="conv_tol" default="1.0E-7"/>
+  <arg name="pub_potential" default="1"/>
+  <arg name="pub_path" default="1"/>
+  <arg name="pub_gradient" default="1"/>
+  <arg name="pub_vec_field" default="1"/>
+
+  <node pkg="navigation" type="navigation_node" name="navigation_node" output="screen" ns="$(arg ns)">
+    <param name="window_radius" value="$(arg window_radius)"/>
+    <param name="conv_tol" value="$(arg conv_tol)"/>
+    <param name="pub_potential" value="$(arg pub_potential)"/>
+    <param name="pub_path" value="$(arg pub_path)"/>
+    <param name="pub_gradient" value="$(arg pub_gradient)"/>
+    <param name="pub_vec_field" value="$(arg pub_vec_field)"/>
+  </node>
+</launch>
