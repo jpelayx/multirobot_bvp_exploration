@@ -22,7 +22,10 @@
 class Robot
 {
     public: 
+        Robot();
         Robot(ros::NodeHandle *nh, std::string ns);
+
+        void initialize(ros::NodeHandle *nh, std::string ns);
 
         /* set objective vector to follow
          *   objective_vector: 2D objective vector  */
@@ -32,6 +35,11 @@ class Robot
          * if successfull, returns 0 
          * else, return -1                                 */ 
         int get_transform(geometry_msgs::Transform &transform);
+
+        /* puts in transform the tf from robot to local map 
+         * if succesfull, returns 0
+         * else, return -1                                 */
+        int get_local_transform(geometry_msgs::Transform &transform);
 
     private:
         ros::Publisher cmd_vel_pub;

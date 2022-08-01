@@ -4,132 +4,100 @@
 #include <geometry_msgs/PointStamped.h>
 #include <queue>
 
+PotentialGrid::PotentialGrid()
+{
+    return;
+}
+
 PotentialGrid::PotentialGrid(ros::NodeHandle *n, std::string name_space)
 {
-    initialized = 0;
+    initialize(n, name_space);
+}
+
+void PotentialGrid::initialize(ros::NodeHandle *n, std::string name_space)
+{
     // n->getParam("pub_potential", param_pub_pot);
     // n->getParam("pub_gradient", param_pub_gradient_vec);
     // n->getParam("pub_path", param_pub_path);
     // n->getParam("pub_vec_field", param_pub_vec_field);
-    // n->getParam("window_radius", param_window_radius);
     // n->getParam("conv_tol", param_potential_convergence_tol);
 	param_pub_pot = 1;
 	param_pub_gradient_vec = 1;
 	param_pub_path = 1;
 	param_pub_vec_field = 1;
-	param_window_radius = 3.5;
 	param_potential_convergence_tol = 1.0E-7;
 
-    std::cout << "WINDOW RADIUS: " << param_window_radius << std::endl;
-    std::cout << "CONV TOL: " << param_potential_convergence_tol << std::endl;
-
-    std::cout << "namespace: " << name_space << std::endl;
-    ns="";
-     if(name_space != "/"){
-        ns = name_space+"/";
-        ns.erase(ns.begin());
-    }
-    std::cout << "ns: " << ns << std::endl;
-    map_sub = n->subscribe("map", 1, &PotentialGrid::get_map, this);
-    objective_sub = n->subscribe("objective", 1, &PotentialGrid::get_objective, this);
-    objective_is_set = false;
+    objectives_set = false;
 
     if(param_pub_pot){
-        ROS_INFO("publishing to /potential_field");
+        ROS_INFO("publishing to %s/potential_field", name_space.c_str());
         potential_pub = n->advertise<nav_msgs::OccupancyGrid>("potential_field",1);
     }
     if(param_pub_gradient_vec){
-        ROS_INFO("publishing to /gradient");
+        ROS_INFO("publishing to %s/gradient", name_space.c_str());
         vector_pub = n->advertise<visualization_msgs::Marker>("gradient",1);
     }
     if(param_pub_path){
+        ROS_INFO("publishing to %s/path", name_space.c_str());
         path_pub = n->advertise<nav_msgs::Path>("path",1);
         path.header.frame_id = "map";
         path.header.seq = 0;
     }
-    vector_field_pub = n->advertise<visualization_msgs::Marker>("vector_field", 1);
-
-    robot = new Robot(n, ns);
+    if(param_pub_vec_field){    
+        ROS_INFO("publishing to %s/vector_field", name_space.c_str());
+        vector_field_pub = n->advertise<visualization_msgs::Marker>("vector_field", 1);
+    }
 }
 
-void PotentialGrid::get_map(const nav_msgs::OccupancyGrid::ConstPtr& map){
+void PotentialGrid::update(const nav_msgs::OccupancyGrid::ConstPtr& map, geometry_msgs::Transform robot_pos, float radius)
+{
     grid_mtx.lock();
     // update meta info
     height = map->info.height;
     width  = map->info.width;
     resolution = map->info.resolution;
     map0 = map->info.origin.position;
-    grid_mtx.unlock();
 
     int map_size = height * width;
-    int x0=0, xf=height, y0=0, yf=width;
+    Window area(0,width,0,height);
 
-    ROS_INFO("updating info");
-
-    geometry_msgs::Transform current_pos;
-    if(robot->get_transform(current_pos) == -1){
-        return;
-    }    
-    // ROS_INFO("current position = %f, %f\n height, width, resolution = %d, %d, %f", current_pos.transform.translation.x, current_pos.transform.translation.y, height, width, resolution);
-    // ROS_INFO("position on grid = %d, %d", current_grid_x, current_grid_y);
-
-    grid_mtx.lock();
-    if(!initialized){
-        //new grid
-        // ROS_INFO("new grid");
+    // initializing new width x height grid with new cells
+    if ( grid.empty() || grid.size() != width || grid[0].size() != height)
+    {
         grid.clear();
         grid.resize(width);
-
         for(int i=0; i<width; i++){
             for(int j=0; j<height; j++){
                 Cell *c = new Cell (map->data[i+j*width]);
                 grid[i].push_back(c);
             }
         }
-        initialized = true;
     }
-    else{
-        //update activation window
-        std::cout << "window radius: " << param_window_radius << " resolution: " << resolution << std::endl;
-        x0 = grid_x(current_pos) - (int)(param_window_radius/resolution);
-        std::cout << "x0 = " << x0;
-        if(x0<0)
-            x0=0;
-        xf = grid_x(current_pos) + (int)(param_window_radius/resolution);
-        std::cout << ", xf = " << xf;
-        if(xf>width)
-            xf=width;
-        y0 = grid_y(current_pos) - (int)(param_window_radius/resolution);
-        std::cout << ", y0 = " << y0;
-        if(y0<0)
-            y0=0;
-        yf = grid_y(current_pos) + (int)(param_window_radius/resolution);
-        std::cout << ", yf = " << yf << std::endl;
-        if(yf>height)
-            yf=height;
-
-        for(int i=x0; i<xf; i++){
-            for(int j=y0; j<yf; j++){
+    // updating area in active window 
+    else 
+    {
+        if (radius != -1) // -1 means that all map area should be updated
+        {
+            int x = grid_x(robot_pos),
+                y = grid_y(robot_pos);
+        
+            area.x0 = x - (int)(radius/resolution);
+            if (area.x0 < 0) area.x0 = 0;
+            area.xf = x + (int)(radius/resolution);
+            if (area.xf > width-1)   area.xf = width-1;
+            area.y0 = y - (int)(radius/resolution);
+            if (area.y0 < 0) area.y0 = 0;
+            area.yf = y + (int)(radius/resolution);
+            if (area.yf > height-1)   area.yf = height-1;
+        } 
+        for(int i=area.x0; i<area.xf; i++){
+            for(int j=area.y0; j<area.yf; j++){
                 grid[i][j]->update(map->data[i+j*width]);
             }
         }
     }
+    active_area = area;
     grid_mtx.unlock();
-
-    ROS_INFO("updating potential (%d to %d, %d to %d", x0, xf, y0, yf);
-    update_potential(x0, xf, y0, yf);
-
-    if(param_pub_vec_field)
-        publish_vector_field();
-   
-    if(param_pub_pot)
-        publish_potential_field(map->info);
-}
-
-void PotentialGrid::get_objective(const geometry_msgs::PointStamped::ConstPtr& p)
-{
-    objective = p->point; 
-    objective_is_set = true;
 }
 
 int PotentialGrid::grid_x(geometry_msgs::Transform pos){
@@ -156,20 +124,16 @@ double PotentialGrid::world_y(int y){
     return (y * resolution) + map0.y + resolution/2;
 }
 
-void PotentialGrid::update_potential(int x, int x_max, int y, int y_max){
-    expand_obstacles(x,x_max,y,y_max);
-    if(!objective_is_set)
-        set_goal(x,x_max,y,y_max);
-    else
-        set_goal(objective);
+void PotentialGrid::update_potential(){
+    expand_obstacles();
 
     double error = 100, old;
     int iterations = 0;
     grid_mtx.lock();
     while(error > param_potential_convergence_tol){
         error = 0;
-        for(int i=x; i<x_max; i++){
-            for (int j=y; j<y_max; j++){
+        for(int i=active_area.x0; i<active_area.xf; i++){
+            for (int j=active_area.y0; j<active_area.yf; j++){
                 if (grid.at(i).at(j)->occupation == FREE){
                     old = grid.at(i).at(j)->potential;
                     grid.at(i).at(j)->potential = (grid.at(i-1).at(j)->potential +
@@ -198,33 +162,47 @@ void PotentialGrid::set_goal(geometry_msgs::Point p)
     int yf = y + radius < height? y + radius  : height - 1;
 
     grid_mtx.lock();
-    for(int i = x0; i <= xf; i++)
-        for(int j = y0; j <= yf; j++)
-            if(grid[i][j]->occupation == FREE)
+    objectives.clear();
+    for(int i = active_area.x0; i <= active_area.xf; i++)
+        for(int j = active_area.y0; j <= active_area.yf; j++)
+        {
+            if (i >= x0 && i <= xf && j >= y0 && j <= yf )
+            {
+                grid[i][j]->occupation = OBJECTIVE;
                 grid[i][j]->potential = 0.0;
+                objectives.push_back(i);
+                objectives.push_back(j);
+            }
+            else if( grid[i][j]->occupation == OBJECTIVE )
+                grid[i][j]->occupation = FREE;
+        }
+
+    objectives_set = true;
+
     grid_mtx.unlock();
 }
 
-void PotentialGrid::set_goal(int x, int x_max, int y, int y_max){
+void PotentialGrid::set_local_goal()
+{
     bool frontier_found = false;
-    ROS_INFO("setting up frontiers");
-    for(int i=x; i<x_max; i++){
-        for(int j=y; j<y_max; j++){
+    for(int i=active_area.x0; i<active_area.xf; i++){
+        for(int j=active_area.y0; j<active_area.yf; j++){
             if(is_frontier(i,j)){
                 if(!frontier_found)
                     frontier_found = true;
                 grid[i][j]->frontier  = FRONTIER;
             }     
+            if(grid[i][j]->occupation == OBJECTIVE)
+                grid[i][j]->occupation == FREE;
         }
     }
     if(!frontier_found)
         return;
-    ROS_INFO("frontiers found");
     
     std::vector<int> frontier_centers;
     
-    for(int i=x; i<x_max; i++)
-        for(int j=x; j<y_max; j++)
+    for(int i=active_area.x0; i<active_area.xf; i++)
+        for(int j=active_area.y0; j<active_area.yf; j++)
             if(grid[i][j]->frontier == FRONTIER){
                 std::vector<int> frontier;
                 geometry_msgs::Point center;
@@ -259,7 +237,6 @@ void PotentialGrid::set_goal(int x, int x_max, int y, int y_max){
                             }
                         
                 }
-
                 center.x = center.x/size;
                 center.y = center.y/size;
 
@@ -276,17 +253,22 @@ void PotentialGrid::set_goal(int x, int x_max, int y, int y_max){
                 frontier_centers.push_back(closest_x);
                 frontier_centers.push_back(closest_y);
             }
+    objectives.clear();
     for(int n=0; n<frontier_centers.size(); n+=2){
         ROS_INFO("center: %d, %d == %f, %f", frontier_centers[n], frontier_centers[n+1], world_x(frontier_centers[n]), world_y(frontier_centers[n+1]));
         grid[frontier_centers[n]][frontier_centers[n+1]]->potential = 0.0;
+        grid[frontier_centers[n]][frontier_centers[n+1]]->occupation = OBJECTIVE;
+        objectives.push_back(frontier_centers[n]);
+        objectives.push_back(frontier_centers[n+1]);
     }
+    objectives_set = true;
     return;     
 }
         
-void PotentialGrid::expand_obstacles(int x, int x_max, int y, int y_max){
+void PotentialGrid::expand_obstacles(){
     int rad = 3;
-    for(int i=x; i<x_max; i++)
-        for(int j=y; j<y_max; j++)
+    for(int i=active_area.x0; i<active_area.xf; i++)
+        for(int j=active_area.y0; j<active_area.yf; j++)
         {
             if(grid[i][j]->occupation == OCCUPIED){
                 for(int inear = i-rad; inear<=i+rad; inear++)

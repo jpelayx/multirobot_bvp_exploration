@@ -1,6 +1,16 @@
 #include "Robot.h"
 
+Robot::Robot()
+{
+    return;
+}
+
 Robot::Robot(ros::NodeHandle *nh, std::string ns)
+{
+    initialize(nh, ns);
+}
+
+void Robot::initialize(ros::NodeHandle *nh, std::string ns)
 {
     name = ns;
     tf_listener = new tf2_ros::TransformListener (tf_buffer);
@@ -78,6 +88,20 @@ double Robot::normalize_angle(double a)
 }
 
 int Robot::get_transform(geometry_msgs::Transform &transform)
+{
+    geometry_msgs::TransformStamped current_pos;
+    try{
+            current_pos = tf_buffer.lookupTransform("map", name+"base_link", ros::Time(0));
+            transform = current_pos.transform;
+            return 0;
+    }
+    catch(tf2::TransformException &ex){
+        ROS_WARN("%s",ex.what());
+        return -1;
+    }
+}
+
+int Robot::get_local_transform(geometry_msgs::Transform &transform)
 {
     geometry_msgs::TransformStamped current_pos;
     try{
