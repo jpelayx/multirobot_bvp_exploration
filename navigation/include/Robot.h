@@ -43,6 +43,7 @@ class Robot
 
     private:
         ros::Publisher cmd_vel_pub;
+        ros::Publisher path_pub; // TODO
 
         tf2_ros::Buffer tf_buffer;
         tf2_ros::TransformListener *tf_listener;

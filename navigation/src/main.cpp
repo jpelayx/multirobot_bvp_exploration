@@ -1,4 +1,4 @@
-#include "PotentialGrid.h"
+#include "Navigator.h"
 
 #define WINDOW_RADIUS 3.7
 #define CONV_ERROR 0.05
@@ -12,15 +12,7 @@ int main (int argc, char **argv){
 
     std::string ns = ros::this_node::getNamespace();
 
-    PotentialGrid g(&n, ns);
-
-    while(ros::ok())
-    {
-        ros::spinOnce();
-        if(g.initialized){
-           g.followPotential();            
-        }
-        loop_rate.sleep();
-    }
+    Navigator nav(&n, ns);
+    nav.run();
     return 0;
 }

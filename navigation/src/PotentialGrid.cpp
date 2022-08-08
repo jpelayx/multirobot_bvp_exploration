@@ -18,12 +18,10 @@ void PotentialGrid::initialize(ros::NodeHandle *n, std::string name_space)
 {
     // n->getParam("pub_potential", param_pub_pot);
     // n->getParam("pub_gradient", param_pub_gradient_vec);
-    // n->getParam("pub_path", param_pub_path);
     // n->getParam("pub_vec_field", param_pub_vec_field);
     // n->getParam("conv_tol", param_potential_convergence_tol);
 	param_pub_pot = 1;
 	param_pub_gradient_vec = 1;
-	param_pub_path = 1;
 	param_pub_vec_field = 1;
 	param_potential_convergence_tol = 1.0E-7;
 
@@ -36,12 +34,6 @@ void PotentialGrid::initialize(ros::NodeHandle *n, std::string name_space)
     if(param_pub_gradient_vec){
         ROS_INFO("publishing to %s/gradient", name_space.c_str());
         vector_pub = n->advertise<visualization_msgs::Marker>("gradient",1);
-    }
-    if(param_pub_path){
-        ROS_INFO("publishing to %s/path", name_space.c_str());
-        path_pub = n->advertise<nav_msgs::Path>("path",1);
-        path.header.frame_id = "map";
-        path.header.seq = 0;
     }
     if(param_pub_vec_field){    
         ROS_INFO("publishing to %s/vector_field", name_space.c_str());
@@ -127,7 +119,7 @@ double PotentialGrid::world_y(int y){
 void PotentialGrid::update_potential(){
     expand_obstacles();
 
-    double error = 100, old;
+    double error = FLT_MAX, old;
     int iterations = 0;
     grid_mtx.lock();
     while(error > param_potential_convergence_tol){
@@ -266,7 +258,7 @@ void PotentialGrid::set_local_goal()
 }
         
 void PotentialGrid::expand_obstacles(){
-    int rad = 3;
+    int rad = NAVIGATOR_EXPAND_OBSTACLES_NUM;
     for(int i=active_area.x0; i<active_area.xf; i++)
         for(int j=active_area.y0; j<active_area.yf; j++)
         {
@@ -283,25 +275,25 @@ void PotentialGrid::expand_obstacles(){
 }
 
 bool PotentialGrid::is_frontier(int i, int j){
-    if(grid[i][j]->occupation != UNEXPLORED)
+    if(grid[i][j]->occupation != FREE)
         return false;
     if(i>0)
-    if(grid[i-1][j]->occupation == FREE)
+    if(grid[i-1][j]->occupation == UNEXPLORED)
         return true;
     if(i<width-1)
-        if(grid[i+1][j]->occupation == FREE)
+        if(grid[i+1][j]->occupation == UNEXPLORED)
             return true;
     if(j>0)
-        if(grid[i][j-1]->occupation == FREE)
+        if(grid[i][j-1]->occupation == UNEXPLORED)
             return true;
     if(j<height-1)
-        if(grid[i][j+1]->occupation == FREE)
+        if(grid[i][j+1]->occupation == UNEXPLORED)
             return true;
     return false;
 }
 
 bool PotentialGrid::near_occupied(int i, int j){
-    int rad = 3;
+    int rad = NAVIGATOR_EXPAND_OBSTACLES_NUM;
     if(grid[i][j]->occupation != FREE)
         return false;
     for(int x = i-rad; x <= i+rad; x++)
@@ -327,24 +319,9 @@ std::vector<double> PotentialGrid::normalized_gradient(int x, int y){
     return v;
 }
 
-void PotentialGrid::followPotential(){
-    geometry_msgs::Transform pos;
-    if(robot->get_transform(pos)==-1)
-        return;
-   
-    grid_mtx.lock();
-    int x = grid_x(pos);
-    int y = grid_y(pos);
-    std::vector<double> gradient = normalized_gradient(x, y);
-    grid_mtx.unlock();
-    // ROS_INFO("gradient (%f, %f)", gradient[0], gradient[1]);
-    if(param_pub_gradient_vec)
-        publish_vector(gradient, pos);
-    if(param_pub_path)
-        publish_path(pos);
-    
-    robot->follow(gradient);
-
+std::vector<double> PotentialGrid::normalized_gradient(geometry_msgs::Transform t){
+    int x = grid_x(t), y = grid_y(t);
+    return normalized_gradient(x, y);
 }
 
 void PotentialGrid::publish_potential_field(nav_msgs::MapMetaData info){
@@ -463,20 +440,6 @@ void PotentialGrid::publish_vector_field(){
     }
     vector_field_pub.publish(m);
 }
-
-void PotentialGrid::publish_path(geometry_msgs::Transform current_pos){
-    geometry_msgs::PoseStamped * p = new geometry_msgs::PoseStamped;
-    p->header.frame_id = "map";
-    p->header.stamp = ros::Time(0);
-    p->pose.orientation = current_pos.rotation;
-    p->pose.position.x = current_pos.translation.x;
-    p->pose.position.y = current_pos.translation.y;
-    p->pose.position.z = current_pos.translation.z;
-
-    path.poses.push_back(*p);
-    path_pub.publish(path);
-}
-
 
 Cell::Cell(int v){
     if(v >= OCC_TRESH){

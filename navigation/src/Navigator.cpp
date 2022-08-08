@@ -42,7 +42,7 @@ void Navigator::get_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
 {
     geometry_msgs::Transform t;
     robot.get_transform(t);
-    if (!is_merged) // first time getting local map 
+    if (!is_merged) // first time getting global map 
     {
         grid.update(map, t, -1); // update entire area
         is_merged = true;
@@ -55,7 +55,7 @@ void Navigator::get_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
 void Navigator::get_local_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
 {
     geometry_msgs::Transform transform;
-    if (robot.get_transform(transform) == 0)
+    if (robot.get_transform(transform) == 0)  // has merged with global map
     {
         map_sub = node_handle->subscribe("/map", 1, &Navigator::get_map, this);
         local_map_sub.shutdown();
@@ -65,7 +65,7 @@ void Navigator::get_local_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
     else 
     {
         geometry_msgs::Transform t;
-        robot.get_transform(t);
+        robot.get_local_transform(t);
         grid.update(map, t, param_window_radius);
         grid.set_local_goal();
         is_objective_set = true;
@@ -85,9 +85,6 @@ void Navigator::run()
     while (ros::ok())
     {
         ros::spinOnce();
-
-        if (!is_objective_set) // wait for objective
-            break;
 
         geometry_msgs::Transform transform;
         if (is_merged)

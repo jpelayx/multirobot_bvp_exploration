@@ -19,6 +19,8 @@
 #define OCC_TRESH 70
 #define FREE_TRESH 30
 
+#define NAVIGATOR_EXPAND_OBSTACLES_NUM 3
+
 enum OccType {UNEXPLORED, OCCUPIED, OCCUPIED_EXP, FREE, OBJECTIVE};
 enum FrontType {FRONTIER, MARKED_FRONTIER, NDA};
 
@@ -44,7 +46,7 @@ class Window
             xf,
             y0,
             yf;
-}
+};
 
 class PotentialGrid
 {
@@ -62,6 +64,7 @@ class PotentialGrid
          * area updated will become grid's active window (e.g. area where potential field will be calculated)
          */
         void update(const nav_msgs::OccupancyGrid::ConstPtr &m, geometry_msgs::Transform robot_pos, float radius = -1);
+        
         // updates potential in active window 
         void update_potential();
 
@@ -79,14 +82,16 @@ class PotentialGrid
     private:
         ros::Publisher potential_pub;
         ros::Publisher vector_pub;
-        ros::Publisher path_pub;
         ros::Publisher vector_field_pub;
 
-        nav_msgs::Path path;
-
+        void publish_potential_field(nav_msgs::MapMetaData);
+        void publish_vector(std::vector<double>, geometry_msgs::Transform);
+        void publish_vector_field();
+        
         std::vector<std::vector<Cell*>> grid;
         Window active_area;
         
+        // metadata
         geometry_msgs::Point map0;
         int width, height;
         double resolution;
@@ -94,15 +99,19 @@ class PotentialGrid
         std::vector<int> objectives;
         bool objectives_set;
 
+        // ros params 
         int param_pub_pot,
             param_pub_gradient_vec,
-            param_pub_vec_field,
-            param_pub_path;
+            param_pub_vec_field;
         float param_potential_convergence_tol;
 
         std::mutex grid_mtx;
 
-        std::string ns; // namespace
+        // namespace
+        std::string ns; 
+
+        /* functions for converting from world coordinates to grid indexes 
+         * and vice-versa                                                  */
 
         int grid_x(geometry_msgs::Transform);
         int grid_y(geometry_msgs::Transform);
@@ -111,12 +120,13 @@ class PotentialGrid
         double world_x(int x); 
         double world_y(int y); 
 
+        // expand obstacles by NAVIGATOR_EXPAND_OBSTACLES_NUM
         void expand_obstacles();
+        /* true if cell is free and at least onde adjacent cell is unexplored 
+         * false otherwise                                                    */ 
         bool is_frontier(int x,int y);
+
         bool near_occupied(int x,int y);
 
-        void publish_potential_field(nav_msgs::MapMetaData);
-        void publish_vector(std::vector<double>, geometry_msgs::Transform);
-        void publish_path(geometry_msgs::Transform); 
-        void publish_vector_field();
+        std::vector<double> normalized_gradient(int x, int y);
 };
