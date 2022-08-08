@@ -28,17 +28,19 @@ void PotentialGrid::initialize(ros::NodeHandle *n, std::string name_space)
     objectives_set = false;
 
     if(param_pub_pot){
-        ROS_INFO("publishing to %s/potential_field", name_space.c_str());
+        ROS_INFO("publishing to %spotential_field", name_space.c_str());
         potential_pub = n->advertise<nav_msgs::OccupancyGrid>("potential_field",1);
     }
     if(param_pub_gradient_vec){
-        ROS_INFO("publishing to %s/gradient", name_space.c_str());
+        ROS_INFO("publishing to %sgradient", name_space.c_str());
         vector_pub = n->advertise<visualization_msgs::Marker>("gradient",1);
     }
     if(param_pub_vec_field){    
-        ROS_INFO("publishing to %s/vector_field", name_space.c_str());
+        ROS_INFO("publishing to %svector_field", name_space.c_str());
         vector_field_pub = n->advertise<visualization_msgs::Marker>("vector_field", 1);
     }
+    
+    reset_updated();
 }
 
 void PotentialGrid::update(const nav_msgs::OccupancyGrid::ConstPtr& map, geometry_msgs::Transform robot_pos, float radius)
@@ -89,6 +91,7 @@ void PotentialGrid::update(const nav_msgs::OccupancyGrid::ConstPtr& map, geometr
         }
     }
     active_area = area;
+    set_updated();
     grid_mtx.unlock();
 }
 
@@ -117,7 +120,12 @@ double PotentialGrid::world_y(int y){
 }
 
 void PotentialGrid::update_potential(){
+    if(!has_updated())
+        return;
+
+    std::cout << "expanding obstacles \n";
     expand_obstacles();
+    std::cout << "expanded obstacles \n";
 
     double error = FLT_MAX, old;
     int iterations = 0;
@@ -139,6 +147,8 @@ void PotentialGrid::update_potential(){
         iterations++;
     }
     grid_mtx.unlock();
+    std::cout << "oublishing pf \n";
+    publish_potential_field();
     ROS_INFO("potential converged with %d iterations", iterations);
 }
 
@@ -171,11 +181,13 @@ void PotentialGrid::set_goal(geometry_msgs::Point p)
 
     objectives_set = true;
 
+    set_updated();
     grid_mtx.unlock();
 }
 
 void PotentialGrid::set_local_goal()
 {
+    grid_mtx.lock();
     bool frontier_found = false;
     for(int i=active_area.x0; i<active_area.xf; i++){
         for(int j=active_area.y0; j<active_area.yf; j++){
@@ -254,17 +266,21 @@ void PotentialGrid::set_local_goal()
         objectives.push_back(frontier_centers[n+1]);
     }
     objectives_set = true;
+    grid_mtx.unlock();
     return;     
 }
         
 void PotentialGrid::expand_obstacles(){
     int rad = NAVIGATOR_EXPAND_OBSTACLES_NUM;
+    grid_mtx.lock();
+    std::cout << "width: " << width << " heigth: " << height << std::endl;
+    std::cout << "active area: " << active_area.x0 << " - "  << active_area.xf << ", " << active_area.y0 << " - " << active_area.yf << std::endl; 
     for(int i=active_area.x0; i<active_area.xf; i++)
         for(int j=active_area.y0; j<active_area.yf; j++)
         {
             if(grid[i][j]->occupation == OCCUPIED){
-                for(int inear = i-rad; inear<=i+rad; inear++)
-                    for(int jnear=j-rad; jnear<=j+rad; jnear++){
+                for(int inear = (i>=rad? i-rad : 0); inear <= (i<width-rad? i+rad : width-1); inear++)
+                    for(int jnear=(j>=rad? j-rad : 0); jnear<= (j<height-rad? j+rad : height-1); jnear++){
                         if(grid[inear][jnear]->occupation == FREE){
                             grid[inear][jnear]->occupation = OCCUPIED_EXP;
                             grid[inear][jnear]->potential  = 1.0;
@@ -272,6 +288,7 @@ void PotentialGrid::expand_obstacles(){
                     }
             }
         }
+    grid_mtx.unlock();
 }
 
 bool PotentialGrid::is_frontier(int i, int j){
@@ -304,8 +321,15 @@ bool PotentialGrid::near_occupied(int i, int j){
 }
 
 std::vector<double> PotentialGrid::normalized_gradient(int x, int y){
+    update_potential();
+    std::cout << "updated potential \n";
     std::vector<double> v(2);
     // grid_mtx.lock();
+    if(! (x >= 0 && x <= width &&
+          y >= 0 && y <= height   )) {
+          std::vector<double> empty_vector;
+          return empty_vector;
+    }
     v[0] = (grid[x-1][y]->potential - grid[x+1][y]->potential)/2;
     v[1] = (grid[x][y-1]->potential - grid[x][y+1]->potential)/2;
     // grid_mtx.unlock();
@@ -324,15 +348,19 @@ std::vector<double> PotentialGrid::normalized_gradient(geometry_msgs::Transform 
     return normalized_gradient(x, y);
 }
 
-void PotentialGrid::publish_potential_field(nav_msgs::MapMetaData info){
+void PotentialGrid::publish_potential_field(){
     nav_msgs::OccupancyGrid pf;
-    pf.info = info;
+    pf.info.height = height;
+    pf.info.width = width;
+    pf.info.resolution = resolution;
+    pf.info.origin.position = map0;
     pf.header.frame_id = "map";
     pf.header.seq = 1;
     for(int i=0; i<width; i++)
         for(int j=0; j<height; j++){
             pf.data.push_back(grid[j][i]->show());
         }
+    ROS_INFO("publishing potential field");
     potential_pub.publish(pf);
 }
 
@@ -440,6 +468,28 @@ void PotentialGrid::publish_vector_field(){
     }
     vector_field_pub.publish(m);
 }
+
+void PotentialGrid::set_updated(){
+    update_mtx.lock();
+    update_var = true;
+    update_mtx.unlock();
+}
+
+void PotentialGrid::reset_updated(){
+    update_mtx.lock();
+    update_var = false;
+    update_mtx.unlock();
+}
+
+bool PotentialGrid::has_updated(){
+    bool b;
+    update_mtx.lock();
+    b = update_var;
+    update_mtx.unlock();
+    return b;
+}
+
+// ----------- CELL ------------
 
 Cell::Cell(int v){
     if(v >= OCC_TRESH){

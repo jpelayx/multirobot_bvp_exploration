@@ -84,7 +84,7 @@ class PotentialGrid
         ros::Publisher vector_pub;
         ros::Publisher vector_field_pub;
 
-        void publish_potential_field(nav_msgs::MapMetaData);
+        void publish_potential_field();
         void publish_vector(std::vector<double>, geometry_msgs::Transform);
         void publish_vector_field();
         
@@ -129,4 +129,10 @@ class PotentialGrid
         bool near_occupied(int x,int y);
 
         std::vector<double> normalized_gradient(int x, int y);
+
+        std::mutex update_mtx;
+        bool update_var;
+        void set_updated();
+        void reset_updated();
+        bool has_updated();
 };

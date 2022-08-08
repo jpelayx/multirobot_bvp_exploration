@@ -17,8 +17,8 @@ Navigator::Navigator(ros::NodeHandle *nh, std::string ns)
 
     ROS_INFO("Starting navigation node for robot %s", name_space.c_str());
 
-    robot.initialize(nh, ns);
-    grid.initialize(nh, ns);
+    robot.initialize(nh, name_space);
+    grid.initialize(nh, name_space);
 
     geometry_msgs::Transform transform; 
     if(robot.get_transform(transform) == -1)
@@ -40,6 +40,7 @@ Navigator::Navigator(ros::NodeHandle *nh, std::string ns)
 
 void Navigator::get_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
 {
+    std::cout << "getting map \n";
     geometry_msgs::Transform t;
     robot.get_transform(t);
     if (!is_merged) // first time getting global map 
@@ -49,6 +50,7 @@ void Navigator::get_map(const nav_msgs::OccupancyGrid::ConstPtr &map)
     }
     else 
         grid.update(map, t, param_window_radius);
+    std::cout << "got map \n";
 }
 
 
@@ -87,11 +89,17 @@ void Navigator::run()
         ros::spinOnce();
 
         geometry_msgs::Transform transform;
+        int tf_status;
         if (is_merged)
-            robot.get_transform(transform); // global navigation
+            tf_status = robot.get_transform(transform); // global navigation
         else  
-            robot.get_local_transform(transform); // local navigation
-        std::vector<double> gradient = grid.normalized_gradient(transform);
-        robot.follow(gradient);
+            tf_status = robot.get_local_transform(transform); // local navigation
+        if(tf_status == 0)
+        {
+            std::cout << "getting gradient \n";
+            std::vector<double> gradient = grid.normalized_gradient(transform);
+            std::cout << "got gradient \n";
+            robot.follow(gradient);
+        }
     }
 }
